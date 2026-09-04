@@ -5,7 +5,7 @@ and a swarm of concurrent "buy" transactions hitting it.
 
 Two isolation modes:
   - UNSAFE  : no lock around the Read -> synthetic delay -> Write sequence
-              (mirrors the retailer race condition that produced phantom orders)
+              (mirrors the retailer race condition that produced overselling)
   - SAFE    : a per-SKU mutex wraps the entire transaction (mirrors strict
               2PL / row-level locking)
 
@@ -25,6 +25,7 @@ import threading
 import time
 import statistics
 import json
+from pathlib import Path
 
 INITIAL_STOCK = 50
 PROCESS_DELAY_S = 0.005          # simulated DB write / network latency per transaction
@@ -90,7 +91,9 @@ def do_transaction(inv, orders, customer_id, use_lock, lock, latencies, timeouts
 
 
 def run_phase(n_threads, use_lock):
-    inv = InventoryRecord("RTX3080-FE", INITIAL_STOCK)
+    # Instantiate the Product entity represented in the ERD.
+    product = Product("RTX3080-FE", "RTX 3080 Founders Edition", 699.99)
+    inv = InventoryRecord(product.sku, INITIAL_STOCK)
     orders = []
     latencies = []
     timeouts_flag = []
@@ -142,8 +145,11 @@ def main():
             r = run_phase(n, use_lock)
             results.append(r)
             print(json.dumps(r))
-    with open("/home/claude/sim/results.json", "w") as f:
+    # Write beside the script so it works on any computer.
+    output_path = Path(__file__).with_name("results.json")
+    with output_path.open("w") as f:
         json.dump(results, f, indent=2)
+    print(f"Results saved to {output_path}")
 
 
 if __name__ == "__main__":
